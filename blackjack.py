@@ -1,5 +1,6 @@
 import sys
 import gym
+import logging
 from gym import wrappers, logger
 import numpy as np
 from collections import defaultdict
@@ -21,7 +22,7 @@ class BlackjackAgent(object):
 
     def log_done(self, observation, reward):
         self.log_observation(observation)
-        logger.info('final reward:{}'.format(reward))
+        logger.info('final reward:{}\n'.format(reward))
 
     def get_policy_for_observation(self, Q_s, epsilon):
         """ calculates the action probabilities corresponding to epsilon-greedy policy """
@@ -101,8 +102,12 @@ if __name__ == "__main__":
     num_episodes = 1000 # 500000
 
     # requires version 0.9.7 of gym
-    # FIXME logging
-    logger.set_level(logger.WARN)
+    logger = logging.getLogger()
+    formatter = logging.Formatter('[%(asctime)s] %(message)s')
+    handler = logging.StreamHandler(sys.stderr)
+    handler.setFormatter(formatter)
+    logger.addHandler(handler)
+    logger.setLevel(logging.WARN)
 
     env = gym.make('Blackjack-v0')
     env = wrappers.Monitor(env, directory=outdir, force=True)
