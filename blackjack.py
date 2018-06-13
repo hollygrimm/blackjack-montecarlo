@@ -8,13 +8,9 @@ import gym
 from gym import wrappers, logger
 
 GAMMA = 1.0
-NUM_EPISODES = 1000 # 500000
+NUM_EPISODES = 500000
 
 logger = logging.getLogger()
-formatter = logging.Formatter('[%(asctime)s] %(message)s')
-handler = logging.StreamHandler(sys.stderr)
-handler.setFormatter(formatter)
-logger.addHandler(handler)
 
 
 class BlackjackAgent(object):
@@ -83,7 +79,7 @@ class BlackjackAgent(object):
 
 def learn(base_dir='blackjack-1'):
     env = gym.make('Blackjack-v0')
-    env = wrappers.Monitor(env, directory=base_dir, force=True)
+    env = wrappers.Monitor(env, directory=base_dir, force=True, video_callable=False)
 
     agent = BlackjackAgent(env.action_space)
 
@@ -146,6 +142,8 @@ def main():
 
     # TODO: plot the policy
     # plot_blackjack_values(V)
+    
+    return 0
 
 
 if __name__ == "__main__":
