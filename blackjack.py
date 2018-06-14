@@ -3,20 +3,25 @@ import sys
 import logging
 import numpy as np
 from collections import defaultdict
+import matplotlib.pyplot as plt
+from mpl_toolkits.mplot3d import Axes3D
+from mpl_toolkits.axes_grid1 import make_axes_locatable
 
 import gym
 from gym import wrappers, logger
 
+# TODO between 0 and 1
 GAMMA = 1.0
-NUM_EPISODES = 500000
 
 logger = logging.getLogger()
 
 
 class BlackjackAgent(object):
-    def __init__(self, action_space):
+    def __init__(self, action_space, epsilon_decay):
         self.action_space = action_space
         self.nA = action_space.n
+        self.epsilon_decay = epsilon_decay
+        # TODO add min_epsilon 0.1?
         # initialize Q value and N count dictionaries
         self.Q = defaultdict(lambda: np.zeros(action_space.n))
         self.N = defaultdict(lambda: np.zeros(action_space.n))
@@ -24,8 +29,8 @@ class BlackjackAgent(object):
         self.i_episode = 0
 
     def log_observation(self, observation):
-        player_hand_sum, dealer_showing_card, usable_ace = zip(observation)
-        logger.debug('players current sum:{}, dealer showing card:{}, usable ace:{}'.format(player_hand_sum[0], dealer_showing_card[0], usable_ace[0]))
+        player_hand, dealer_showing, usable_ace = zip(observation)
+        logger.debug('player hand:{}, dealer showing:{}, usable ace:{}'.format(player_hand[0], dealer_showing[0], usable_ace[0]))
 
     def log_done(self, observation, reward):
         self.log_observation(observation)
@@ -60,7 +65,7 @@ class BlackjackAgent(object):
         """ start new episode and update action-value function until episode terminates """
         self.i_episode += 1
         # decay epsilon
-        epsilon = 1.0/((self.i_episode/8000) + 1)
+        epsilon = 1.0/((self.i_episode/self.epsilon_decay) + 1)
         episode = []
         observation = env.reset()
         self.log_observation(observation)
@@ -77,24 +82,25 @@ class BlackjackAgent(object):
             observation = next_observation
         return episode
 
-def learn(base_dir='blackjack-1'):
+def learn(base_dir='blackjack-1', num_episodes=100000, epsilon_decay=8000):
     env = gym.make('Blackjack-v0')
     env = wrappers.Monitor(env, directory=base_dir, force=True, video_callable=False)
 
-    agent = BlackjackAgent(env.action_space)
+    agent = BlackjackAgent(env.action_space, epsilon_decay)
 
-    for i in range(NUM_EPISODES):
+    for i in range(num_episodes):
         if i % 1000 == 0:
-            logger.debug('\rEpisode {}/{}.'.format(i, NUM_EPISODES))
+            logger.debug('\rEpisode {}/{}.'.format(i, num_episodes))
         episode = agent.generate_episode(env)
         agent.update_action_val_function(episode)
 
     # obtain the policy from the action-value function
-    policy = dict((k,np.argmax(v)) for k, v in agent.Q.items())
+    # e.g.  ((4, 7, False), 1)   HIT      ((18, 6, False), 0)  STICK
+    policy = dict((k, np.argmax(v)) for k, v in agent.Q.items())
 
     env.close()
 
-    return policy
+    return policy, agent.Q
 
 def choose_action_by_policy(action_space, policy, observation):
     """ selects action based on trained policy """
@@ -124,6 +130,42 @@ def score(policy, num_episodes=1000):
 
     return np.mean(rewards)
 
+def plot_policy(policy, plot_filename="plot.png"):
+
+    def get_Z(player_hand, dealer_showing, usable_ace):
+        if (player_hand, dealer_showing, usable_ace) in policy:
+            return policy[player_hand, dealer_showing, usable_ace]
+        else:
+            return 1
+
+    def get_figure(usable_ace, ax):
+        x_range = np.arange(1, 11)
+        y_range = np.arange(11, 22)
+        X, Y = np.meshgrid(x_range, y_range)
+        Z = np.array([[get_Z(player_hand, dealer_showing, usable_ace) for dealer_showing in x_range] for player_hand in range(21, 10, -1)])
+        surf = ax.imshow(Z, cmap=plt.get_cmap('Accent', 2), vmin=0, vmax=1, extent=[0.5, 10.5, 10.5, 21.5])
+        plt.xticks(x_range, ('A', '2', '3', '4', '5', '6', '7', '8', '9', '10'))
+        plt.yticks(y_range)
+        ax.set_xlabel('Dealer Showing')
+        ax.set_ylabel('Player Hand')
+        ax.grid(color='black', linestyle='-', linewidth=1)
+        divider = make_axes_locatable(ax)
+        cax = divider.append_axes("right", size="5%", pad=0.1)
+        cbar = plt.colorbar(surf, ticks=[0, 1], cax=cax)
+        cbar.ax.set_yticklabels(['0 (STICK)','1 (HIT)'])
+        cbar.ax.invert_yaxis() 
+            
+    fig = plt.figure(figsize=(15, 15))
+    ax = fig.add_subplot(121)
+    ax.set_title('Usable Ace', fontsize=16)
+    get_figure(True, ax)
+    ax = fig.add_subplot(122)
+    ax.set_title('No Usable Ace', fontsize=16)
+    get_figure(False, ax)
+    plt.savefig(plot_filename)
+    plt.show()
+
+
 def main():
     parser = argparse.ArgumentParser(description=None)
     parser.add_argument('-b', '--base-dir', default='blackjack-1', help='Set base dir.')
@@ -135,13 +177,15 @@ def main():
     elif args.verbosity >= 1:
         logger.setLevel(logging.DEBUG)
     
-    policy = learn(base_dir=args.base_dir)
+    num_episodes = 100000
+    epsilon_decay = 8000
+
+    policy, Q = learn(args.base_dir, num_episodes, epsilon_decay)
 
     final_average_return = score(policy)
     logger.info("final average returns: {}".format(final_average_return))
 
-    # TODO: plot the policy
-    # plot_blackjack_values(V)
+    plot_policy(policy, "diag_{}_{}_{}.png".format(num_episodes, epsilon_decay, final_average_return))
     
     return 0
 
