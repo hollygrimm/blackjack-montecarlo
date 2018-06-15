@@ -10,7 +10,7 @@ from mpl_toolkits.axes_grid1 import make_axes_locatable
 import gym
 from gym import wrappers, logger
 
-# TODO between 0 and 1
+# Rewards in Blackjack happen at the end of the game, no discounting
 GAMMA = 1.0
 
 logger = logging.getLogger()
@@ -21,7 +21,7 @@ class BlackjackAgent(object):
         self.action_space = action_space
         self.nA = action_space.n
         self.epsilon_decay = epsilon_decay
-        # TODO add min_epsilon 0.1?
+
         # initialize Q value and N count dictionaries
         self.Q = defaultdict(lambda: np.zeros(action_space.n))
         self.N = defaultdict(lambda: np.zeros(action_space.n))
@@ -52,7 +52,7 @@ class BlackjackAgent(object):
         return action
 
     def update_action_val_function(self, episode):
-        """ updates the action-value function Q and N count dictionaries for one episode """
+        """ updates the action-value function Q and N count dictionaries for every observation in one episode """
         observations, actions, rewards = zip(*episode)
         discounts = np.array([GAMMA**i for i in range(len(rewards)+1)])
         for i, observation in enumerate(observations):
@@ -95,7 +95,7 @@ def learn(base_dir='blackjack-1', num_episodes=100000, epsilon_decay=8000):
         agent.update_action_val_function(episode)
 
     # obtain the policy from the action-value function
-    # e.g.  ((4, 7, False), 1)   HIT      ((18, 6, False), 0)  STICK
+    # e.g. generate  ((4, 7, False), 1)   HIT      ((18, 6, False), 0)  STICK
     policy = dict((k, np.argmax(v)) for k, v in agent.Q.items())
 
     env.close()
